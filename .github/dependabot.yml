@@ -8,8 +8,8 @@ updates:
   - package-ecosystem: "npm" # See documentation for possible values
     directory: "/frontend" # Location of package manifests
     schedule:
-      interval: "weekly"
+      interval: "monthly"
   - package-ecosystem: "cargo" # See documentation for possible values
     directory: "/api" # Location of package manifests
     schedule:
-      interval: "weekly"
+      interval: "monthly"
