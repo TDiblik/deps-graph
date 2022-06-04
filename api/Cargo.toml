@@ -7,9 +7,12 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4"
-redis = "0.21.0"
+redis = "0.21"
 redis-graph = { version = "0.4.2", features = ["tokio-comp"] }
-serde = "1.0.137"
+reqwest = "0.11.10"
+serde = { version = "1.0.137", features = ["derive"] }
+lazy_static = "1.4.0"
+dotenv = "0.15.0"
 
 [profile.dev]
 opt-level = 0
