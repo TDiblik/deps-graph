@@ -7,6 +7,9 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4"
+redis = "0.21.0"
+redis-graph = { version = "0.4.2", features = ["tokio-comp"] }
+serde = "1.0.137"
 
 [profile.dev]
 opt-level = 0
