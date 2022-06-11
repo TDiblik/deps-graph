@@ -4,6 +4,7 @@ WORKDIR /code
 ARG HOST_USER_NAME
 ENV HOST=$HOST_USER_NAME
 ENV UID=10001 
+ENV CARGO_HOME=/code/.cargo
 
 # Prepare builder image
 RUN apk update \
@@ -21,17 +22,17 @@ RUN adduser \
     "${HOST}"
 
 # Cach dependencies
-RUN cargo new api --bin \
- && mv api/* . \
- && rm -r api/ \
- && rm Cargo.toml
+RUN USER=root cargo new --bin api \
+ && mv ./api/* . \
+ && rm -r ./api/
 COPY Cargo.toml Cargo.toml
-RUN cargo build --release \
- && rm -rf src/ \
- && rm target/release/api
+COPY Cargo.lock Cargo.lock
+RUN cargo build --release  \
+ && rm ./src/*.rs \
+ && rm ./target/release/deps/api*
 
 # Build the project
-COPY src/ src/
+COPY ./src/ ./src/
 RUN cargo build --release
 
 # Host the project on totally blank distor
@@ -46,9 +47,9 @@ ARG HOST_USER_NAME
 ENV HOST=$HOST_USER_NAME
 USER ${HOST}:${HOST}
 
-# Copy the compiled binary
+# Copy the compiled binary and env files
 COPY --from=builder --chown=${HOST}:${HOST} /code/target/release/api .
-
+COPY --chown=${HOST}:${HOST} .env .
 
 EXPOSE 8080
 ENTRYPOINT [ "/server/api" ]

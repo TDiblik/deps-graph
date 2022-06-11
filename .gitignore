@@ -24,7 +24,6 @@ yarn-error.log*
 
 
 # Ignore for backend
-Cargo.lock
 target/
 guide/build/
 gh-pages/

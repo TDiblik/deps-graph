@@ -86,11 +86,25 @@ async fn get_package_example(args: web::Query<ExampleArgs>) -> impl Responder {
     HttpResponse::Ok().body("Results are in console")
 }
 
+static SERVER_IP: &str = "127.0.0.1";
+static SERVER_PORT: u16 = 8080;
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Load .env
-    dotenv::dotenv().expect("Before starting the server, please setup your .env file correctlly.");
+    println!("----- Starting initiation sequence -----");
 
+    // Load .env
+    println!("- Load .env starting -");
+    dotenv::dotenv().ok();
+    println!("User-Agent: {:?}", &*constants::USER_AGENT_IDENTIFIER);
+    println!("- Load .env done -");
+
+    println!("----- Initiation sequence completed -----");
+
+    println!(
+        "----- Starting server at: {:?}:{:?} -----",
+        SERVER_IP, SERVER_PORT
+    );
     HttpServer::new(|| {
         App::new()
             .service(hello)
@@ -98,7 +112,7 @@ async fn main() -> std::io::Result<()> {
             .service(moto_gp_post)
             .service(get_package_example)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind((SERVER_IP, SERVER_PORT))?
     .run()
     .await
 }
