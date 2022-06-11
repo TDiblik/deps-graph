@@ -8,3 +8,9 @@
 ### Optional
 
 - If you wish to see frontend, while developing api, please copy frontend production build, into `./api/react-output`
+
+
+
+
+
+example for mirroring
