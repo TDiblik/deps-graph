@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4"
+actix-files = "0.6"
 redis = "0.21"
 redis-graph = { version = "0.4.2", features = ["tokio-comp"] }
 reqwest = "0.11.10"

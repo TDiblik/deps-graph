@@ -2,6 +2,7 @@
 extern crate lazy_static;
 extern crate dotenv;
 
+use actix_files::Files;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use redis_graph::*;
 
@@ -15,10 +16,6 @@ mod constants;
         https://crates.io/data-access
         https://docs.npmjs.com/policies/crawlers
 */
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
-}
 
 #[post("/moto_gp/create")]
 async fn moto_gp_post() -> impl Responder {
@@ -89,6 +86,11 @@ async fn get_package_example(args: web::Query<ExampleArgs>) -> impl Responder {
 static SERVER_IP: &str = "127.0.0.1";
 static SERVER_PORT: u16 = 8080;
 
+#[get("/")]
+async fn hello() -> impl Responder {
+    HttpResponse::Ok().body("Hello world!")
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     println!("----- Starting initiation sequence -----");
@@ -107,10 +109,12 @@ async fn main() -> std::io::Result<()> {
     );
     HttpServer::new(|| {
         App::new()
-            .service(hello)
+            // .service(hello)
             .service(moto_gp_get)
             .service(moto_gp_post)
             .service(get_package_example)
+            // This must be always last
+            .service(Files::new("/", "./react-output/").index_file("index.html"))
     })
     .bind((SERVER_IP, SERVER_PORT))?
     .run()
