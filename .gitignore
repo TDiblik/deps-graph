@@ -27,7 +27,6 @@ yarn-error.log*
 target/
 guide/build/
 gh-pages/
-react-output/
 
 *.so
 *.out
@@ -51,3 +50,5 @@ db-data/
 
 # Other
 .env
+docs
+api.*
