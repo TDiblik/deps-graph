@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	docs "api/docs"
+	"api/models"
 
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -53,6 +54,9 @@ func main() {
 	}
 
 	// TODO: Gin has this big error message about proxies, look into it and set it up accordingly.
+
+	// Setup db
+	models.Setup()
 
 	// Default server config
 	r := gin.Default()
