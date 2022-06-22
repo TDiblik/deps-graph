@@ -8,7 +8,7 @@ services:
         HOST_USER_NAME: ${HOST_USER_NAME} # from .env file
     env_file: .env
     ports:
-      - "443:8080"
+      - "443:8000"
     depends_on:
       - redisGrap
     links:
@@ -16,7 +16,6 @@ services:
 
   # TODO:
   #   - Add password to the database
-  #   - Try removing the port and connecting from inside of the api container
   redisGraph:
     image: "redislabs/redisgraph:2.8.13"
     ports:
