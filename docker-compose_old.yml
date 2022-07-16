@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        HOST_USER_NAME: ${HOST_USER_NAME} # from .env file
+    env_file: .env
+    ports:
+      - "443:8000"
+    depends_on:
+      - redisGrap
+    links:
+      - redisGraph
+
+  # TODO:
+  #   - Add password to the database
+  redisGraph:
+    image: "redislabs/redisgraph:2.8.13"
+    ports:
+      - "6379:6379"
+    volumes:
+      - "./db-data/redisGraph:/data"
