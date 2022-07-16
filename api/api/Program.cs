@@ -21,7 +21,7 @@ namespace api
                     Description = "Get graph of your dependencies!",
                     TermsOfService = new Uri("https://github.com/TDiblik/deps-graph/blob/master/LICENSE"),
                     Contact = new OpenApiContact {
-                        Name = "Tomáš Diblík's contact info",
+                        Name = "Tomáš Diblík",
                         Email = "dibla.tomas@post.cz",
                         Url = new Uri("https://tomasdiblik.cz/")
                     },
