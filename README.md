@@ -1,12 +1,15 @@
-# Deps graph
+## Dev
 
-## Development
+I'll put these steps into makefile, however, I want to focus on my project first.
 
-1. Copy every `.env.example` to `.env`
-2. Change values inside `.env` to make sense
+### Setup postgres with cargo data dump
 
-### Optional
-
-- If you wish to see frontend, while developing api, please copy frontend production build, into `./api/react-output`
-- You have the option of developing api inside docker, or using the gowatch. It's up to you.
-- Always write tests for backend. Frontend is kind of a wild west, so as long as you use typescript without `any`, I wont bother you :D
+- Download this: https://static.crates.io/db-dump.tar.gz
+- Extract it into api/dumps/cargo/dump
+- `docker build . -t custom-cargo-dump-db` from api/dumps/cargo/dump
+- `cd ../../`
+- `docker run -it --name deps-graph-postgres-cargo -d -p 7501:5432 -v $(pwd)/db-data/postgresCargo:/var/lib/postgresql/data -e POSTGRES_PASSWORD=c4rg0DUmP -e POSTGRES_USER=dumpuser -e POSTGRES_DB=dumpdb -e PGDATA=/var/lib/postgresql/data/pgdata custom-cargo-dump-db`
+- `docker exec -it deps-graph-postgres-cargo bash`
+- `cd /var/lib/postgresql/data`
+- `psql dumpdb -U dumpuser < schema.sql`
+- `psql dumpdb -U dumpuser < import.sql`
