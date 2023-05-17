@@ -1,0 +1,9 @@
+data-dumps/*
+
+!data-dumps/cargo/
+data-dumps/cargo/*
+!data-dumps/cargo/.gitkeep
+
+!data-dumps/redisgraph/
+data-dumps/redisgraph/*
+!data-dumps/redisgraph/.gitkeep
