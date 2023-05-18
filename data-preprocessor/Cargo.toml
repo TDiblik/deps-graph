@@ -1,0 +1,17 @@
+[package]
+name = "data-preprocessor"
+version = "0.0.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.71"
+
+redis = "0.22.1"
+redis-graph = "0.4.3"
+
+sqlx = { version = "0.6.3", features = ["runtime-tokio-native-tls" , "postgres", "json", "chrono" ] }
+tokio = { version ="1.28.1", features = ["full"] }
+serde = "1.0.163"
+serde_json = "1.0.96"
