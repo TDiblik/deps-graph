@@ -1,5 +1,3 @@
-// Cargo db types
-
 use std::collections::HashMap;
 
 #[derive(Debug, sqlx::FromRow)]
@@ -18,7 +16,7 @@ pub struct CargoCrateRGNode {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-pub struct CargoCrateVersionRGNode {
+pub struct CargoCrateVersionDBResponse {
     pub id: i32,
     pub crate_id: i32,
     pub num: String,
@@ -36,10 +34,21 @@ pub struct CargoDependenciesDBResponse {
     pub target: Option<String>,
     pub kind: CargoDependencyKind,
 }
-#[derive(Debug, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, sqlx::Type)]
 #[repr(i32)]
 pub enum CargoDependencyKind {
     Normal = 0,
     Build = 1,
     Dev = 2,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CargoDependencyRGEdge {
+    pub from_version_id: i32,
+    pub to_version_id: i32,
+    pub required_semver: String,
+    pub optional: bool,
+    pub default_features: bool,
+    pub target: Option<String>,
+    pub kind: CargoDependencyKind,
 }

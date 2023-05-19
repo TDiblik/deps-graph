@@ -10,7 +10,7 @@ use redis_graph::*;
 use sqlx::postgres::PgPoolOptions;
 use utils::{get_crate_versions_from_db_async, get_crates_from_db_async, get_users_from_db_async};
 
-use crate::utils::get_raw_dependencies_from_db_async;
+use crate::utils::{connect_db_dependencies, get_raw_dependencies_from_db_async};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -36,6 +36,7 @@ async fn main() -> Result<()> {
         )?;
     }
 
+    log_debug!("Start fetching data from postgres...");
     let db_results = {
         let users_promise = get_users_from_db_async(&postgres_pool);
         let crates_promise = get_crates_from_db_async(&postgres_pool);
@@ -49,16 +50,25 @@ async fn main() -> Result<()> {
             dependenies_promise
         )
     };
+    log_debug!("Done fetching data from postgres...");
 
     let users = db_results.0?;
     let crates = db_results.1?;
     let create_versions = db_results.2?;
-    let dependencies = db_results.3?;
+    let dependencies = db_results.3?; // TODO: Transform data to point to version_id instead of crate_id
+
+    log_debug!("Resolve connected packages and transform into edge structs");
+    let dependency_edges = connect_db_dependencies(&create_versions, &dependencies);
+    log_debug!("Done connecting packages and transforming into edge structs");
+
+    /*
+    dbg!(dependency_edges);
 
     dbg!(users);
     dbg!(crates);
     dbg!(create_versions);
     dbg!(dependencies);
+    */
 
     Ok(())
 }
