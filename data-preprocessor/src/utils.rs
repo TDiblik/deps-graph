@@ -1,11 +1,16 @@
 use std::{collections::HashMap, future::Future};
 
+use redis_graph::GraphCommands;
 use semver::{Version, VersionReq};
+use serde_json::json;
 use sqlx::{Pool, Postgres};
 
-use crate::models::{
-    CargoCrateRGNode, CargoCrateVersionDBResponse, CargoDependenciesDBResponse,
-    CargoDependencyRGEdge, CargoUserRGNode,
+use crate::{
+    constants::REDIS_INSERTION_CHUNK_SIZE,
+    models::{
+        CargoCrateDBResponse, CargoCrateVersionDBResponse, CargoDependenciesDBResponse,
+        CargoDependencyRGEdge, CargoUserDBResponse,
+    },
 };
 
 #[macro_export]
@@ -18,8 +23,8 @@ macro_rules! log_debug {
 
 pub fn get_users_from_db_async(
     pool: &Pool<Postgres>,
-) -> impl Future<Output = Result<Vec<CargoUserRGNode>, sqlx::Error>> + '_ {
-    sqlx::query_as::<_, CargoUserRGNode>(
+) -> impl Future<Output = Result<Vec<CargoUserDBResponse>, sqlx::Error>> + '_ {
+    sqlx::query_as::<_, CargoUserDBResponse>(
         r#"
             select id, gh_login as "gh_username", gh_avatar, name as "preferred_name" from users;
         "#,
@@ -29,8 +34,8 @@ pub fn get_users_from_db_async(
 
 pub fn get_crates_from_db_async(
     pool: &Pool<Postgres>,
-) -> impl Future<Output = Result<Vec<CargoCrateRGNode>, sqlx::Error>> + '_ {
-    sqlx::query_as::<_, CargoCrateRGNode>(
+) -> impl Future<Output = Result<Vec<CargoCrateDBResponse>, sqlx::Error>> + '_ {
+    sqlx::query_as::<_, CargoCrateDBResponse>(
         r#"
             select id, name from crates;
         "#,
@@ -58,6 +63,75 @@ pub fn get_raw_dependencies_from_db_async(
         "#,
     )
     .fetch_all(pool)
+}
+
+pub fn gen_users_redis_graph_query(users: Vec<CargoUserDBResponse>) -> anyhow::Result<Vec<String>> {
+    gen_redis_creation_command(
+        users
+            .iter()
+            .map(|s| {
+                format!(
+                    "[{},{},{},{}]",
+                    json!(s.id),
+                    json!(s.gh_username),
+                    json!(s.gh_avatar),
+                    json!(s.preferred_name)
+                )
+            })
+            .collect(),
+        Some(
+            "create (:CargoUser {id: map[0], gh_username: map[1], gh_avatar: map[2], preferred_name: map[3]})"
+        )
+    )
+}
+
+pub fn gen_crates_redis_graph_query(
+    crates: Vec<CargoCrateDBResponse>,
+) -> anyhow::Result<Vec<String>> {
+    gen_redis_creation_command(
+        crates
+            .iter()
+            .map(|s| format!("[{},{}]", json!(s.id), json!(s.name),))
+            .collect(),
+        Some("create (:CargoCrate {id: map[0], name: map[1]})"),
+    )
+}
+
+pub fn gen_crate_versions_redis_graph_query(
+    crate_versions: Vec<CargoCrateVersionDBResponse>,
+) -> anyhow::Result<Vec<String>> {
+    gen_redis_creation_command(
+        crate_versions
+            .iter()
+            .map(|s| {
+                format!(
+                    "[{},{},{}]",
+                    json!(s.id),
+                    json!(s.num),
+                    json!(json!(s.features).to_string()), // TODO: Dump hack, fix
+                )
+            })
+            .collect(),
+        Some("create (:CargoCrateVersion {id: map[0], num: map[1], features: map[2]})"),
+    )
+}
+
+fn gen_redis_creation_command(
+    mapped_data: Vec<String>,
+    query_to_append_to_end_of_each_chunk: Option<&str>,
+) -> anyhow::Result<Vec<String>> {
+    let mut commands: Vec<String> = vec![];
+
+    for data_row in mapped_data.chunks(REDIS_INSERTION_CHUNK_SIZE) {
+        let mut query_builder = string_builder::Builder::default();
+        query_builder.append("unwind [");
+        query_builder.append(data_row.join(",").trim_end_matches(','));
+        query_builder.append("] as map ");
+        query_builder.append(query_to_append_to_end_of_each_chunk.unwrap_or(""));
+        commands.push(query_builder.string()?.trim().to_string());
+    }
+
+    Ok(commands)
 }
 
 // Assumes db_create_versions are ordered by id and smaller id == smaller version

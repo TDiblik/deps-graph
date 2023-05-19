@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-#[derive(Debug, sqlx::FromRow)]
-pub struct CargoUserRGNode {
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct CargoUserDBResponse {
     pub id: i32,
     pub gh_username: String,
     pub gh_avatar: Option<String>,
@@ -9,7 +9,7 @@ pub struct CargoUserRGNode {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-pub struct CargoCrateRGNode {
+pub struct CargoCrateDBResponse {
     pub id: i32,
     pub name: String,
     // TODO: Add description, repository, documentation and homepage (make sure to update sql and redis commands)
