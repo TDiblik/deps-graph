@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::{collections::HashMap, future::Future};
 
 use semver::{Version, VersionReq};
@@ -64,7 +65,9 @@ pub fn get_raw_dependencies_from_db_async(
     .fetch_all(pool)
 }
 
-pub fn gen_users_redis_graph_node_query(users: &[CargoUserDBResponse]) -> anyhow::Result<Vec<String>> {
+pub fn gen_users_redis_graph_node_query(
+    users: &[CargoUserDBResponse],
+) -> anyhow::Result<Vec<String>> {
     gen_redis_creation_command(
         users
             .iter()
@@ -122,10 +125,10 @@ pub fn gen_published_by_redis_graph_link_query(
         crate_versions.iter().filter(|s| s.published_by.is_some()).map(|s| {
             format!(
                 "[{}, {}]",
-                json!(s.published_by.unwrap()), 
+                json!(s.published_by.unwrap()),
                 json!(s.id)
             )
-        }).collect(), 
+        }).collect(),
         Some("MATCH (cu:CargoUser {id: map[0]}), (cv:CargoCrateVersion {id: map[1]}) CREATE (cu)-[:PUBLISHED]->(cv)")
     )
 }
@@ -137,11 +140,44 @@ pub fn gen_version_redis_graph_link_query(
         crate_versions.iter().map(|s| {
             format!(
                 "[{}, {}]",
-                json!(s.crate_id), 
+                json!(s.crate_id),
                 json!(s.id)
             )
-        }).collect(), 
+        }).collect(),
         Some("MATCH (cc:CargoCrate {id: map[0]}), (cv:CargoCrateVersion {id: map[1]}) CREATE (cc)-[:VERSION]->(cv)")
+    )
+}
+
+// TODO: Same problems as with connect_db_dependencies apply here
+pub fn gen_first_or_latest_version_redis_graph_link_query(
+    crate_versions: &[CargoCrateVersionDBResponse],
+    latest: bool,
+) -> anyhow::Result<Vec<String>> {
+    let mut versions = Vec::with_capacity(crate_versions.len());
+    versions.extend_from_slice(crate_versions);
+    versions.sort_by_key(|s| s.id);
+
+    let mapped_data: Vec<String> = if latest {
+        versions
+            .iter()
+            .rev()
+            .unique_by(|version| version.crate_id)
+            .map(|s| format!("[{}, {}]", json!(s.crate_id), json!(s.id)))
+            .collect()
+    } else {
+        versions
+            .iter()
+            .unique_by(|version| version.crate_id)
+            .map(|s| format!("[{}, {}]", json!(s.crate_id), json!(s.id)))
+            .collect()
+    };
+
+    gen_redis_creation_command(
+        mapped_data,
+        Some(
+            format!("MATCH (cc:CargoCrate {{id: map[0]}}), (cv:CargoCrateVersion {{id: map[1]}}) CREATE (cc)-[:{}]->(cv)",
+            if latest { "LATEST_VERSION" } else { "FIRST_VERSION" }
+        ).as_str())
     )
 }
 

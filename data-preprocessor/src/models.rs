@@ -15,7 +15,7 @@ pub struct CargoCrateDBResponse {
     // TODO: Add description, repository, documentation and homepage (make sure to update sql and redis commands)
 }
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct CargoCrateVersionDBResponse {
     pub id: i32,
     pub crate_id: i32,

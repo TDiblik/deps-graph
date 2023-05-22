@@ -6,10 +6,10 @@ use sqlx::postgres::PgPoolOptions;
 use data_preprocessor::constants::CARGO_GRAPH_NAME;
 use data_preprocessor::utils::{
     connect_db_dependencies, gen_crate_versions_redis_graph_node_query,
-    gen_crates_redis_graph_node_query, gen_published_by_redis_graph_link_query,
-    gen_users_redis_graph_node_query, gen_version_redis_graph_link_query,
-    get_crate_versions_from_db_async, get_crates_from_db_async, get_raw_dependencies_from_db_async,
-    get_users_from_db_async,
+    gen_crates_redis_graph_node_query, gen_first_or_latest_version_redis_graph_link_query,
+    gen_published_by_redis_graph_link_query, gen_users_redis_graph_node_query,
+    gen_version_redis_graph_link_query, get_crate_versions_from_db_async, get_crates_from_db_async,
+    get_raw_dependencies_from_db_async, get_users_from_db_async,
 };
 
 #[tokio::main]
@@ -87,9 +87,15 @@ async fn main() -> Result<()> {
         gen_published_by_redis_graph_link_query(&crate_versions)?;
     let mut versions_link_to_crates_graph_link_query =
         gen_version_redis_graph_link_query(&crate_versions)?;
+    let mut first_versions_graph_link_query =
+        gen_first_or_latest_version_redis_graph_link_query(&crate_versions, false)?;
+    let mut latests_versions_graph_link_query =
+        gen_first_or_latest_version_redis_graph_link_query(&crate_versions, true)?;
 
     queries.append(&mut published_by_graph_link_query);
     queries.append(&mut versions_link_to_crates_graph_link_query);
+    queries.append(&mut first_versions_graph_link_query);
+    queries.append(&mut latests_versions_graph_link_query);
 
     log_debug!("Done generating redisgraph queries from data.");
 
