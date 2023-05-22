@@ -1,18 +1,15 @@
-mod constants;
-mod models;
-mod utils;
-
 use anyhow::Result;
-use constants::CARGO_GRAPH_NAME;
+use data_preprocessor::log_debug;
 use redis_graph::*;
 use sqlx::postgres::PgPoolOptions;
-use utils::{get_crate_versions_from_db_async, get_crates_from_db_async, get_users_from_db_async};
 
-use crate::utils::{
+use data_preprocessor::constants::CARGO_GRAPH_NAME;
+use data_preprocessor::utils::{
     connect_db_dependencies, gen_crate_versions_redis_graph_node_query,
     gen_crates_redis_graph_node_query, gen_published_by_redis_graph_link_query,
     gen_users_redis_graph_node_query, gen_version_redis_graph_link_query,
-    get_raw_dependencies_from_db_async,
+    get_crate_versions_from_db_async, get_crates_from_db_async, get_raw_dependencies_from_db_async,
+    get_users_from_db_async,
 };
 
 #[tokio::main]
