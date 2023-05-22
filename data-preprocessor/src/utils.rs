@@ -59,7 +59,7 @@ pub fn get_raw_dependencies_from_db_async(
 ) -> impl Future<Output = Result<Vec<CargoDependenciesDBResponse>, sqlx::Error>> + '_ {
     sqlx::query_as::<_, CargoDependenciesDBResponse>(
         r#"
-            select version_id "from_version_id", crate_id "to_crate_id", req "required_semver", optional, default_features, target, kind from dependencies;
+            select version_id "from_version_id", crate_id "to_crate_id", req "required_semver", optional, default_features, features, target, kind from dependencies;
         "#,
     )
     .fetch_all(pool)
@@ -145,6 +145,27 @@ pub fn gen_version_redis_graph_link_query(
             )
         }).collect(),
         Some("MATCH (cc:CargoCrate {id: map[0]}), (cv:CargoCrateVersion {id: map[1]}) CREATE (cc)-[:VERSION]->(cv)")
+    )
+}
+
+pub fn gen_dependency_redis_graph_link_query(
+    dependencies: &[CargoDependencyRGEdgeBuilder],
+) -> anyhow::Result<Vec<String>> {
+    // TODO: Add required_semver to label as property for analysis purposes, however it's not needed for core functionality,
+    gen_redis_creation_command(
+        dependencies.iter().map(|s| {
+            format!(
+                "[{}, {}, {}, {}, {}, {}, {}]",
+                json!(s.from_version_id),
+                json!(s.to_version_id),
+                json!(s.optional),
+                json!(s.default_features),
+                json!(s.with_features),
+                json!(s.target),
+                json!(s.kind),
+            )
+        }).collect(),
+        Some("MATCH (cv_from:CargoCrateVersion {id: map[0]}), (cv_to:CargoCrateVersion {id: map[1]}) CREATE (cv_from)-[:DEPENDS_ON {optional: map[2], default_features: map[3], with_features: map[4], target: map[5], kind: map[6]}]->(cv_to)")
     )
 }
 
@@ -254,6 +275,7 @@ pub fn connect_db_dependencies(
                 required_semver: dep.required_semver.clone(),
                 optional: dep.optional,
                 default_features: dep.default_features,
+                with_features: dep.features.clone(),
                 target: dep.target.clone(),
                 kind: dep.kind.clone(),
             });

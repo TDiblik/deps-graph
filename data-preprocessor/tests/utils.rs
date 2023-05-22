@@ -28,6 +28,7 @@ macro_rules! quick_dependency {
             required_semver: $req.into(),
             optional: false,
             default_features: false,
+            features: Vec::new(),
             target: None,
             kind: CargoDependencyKind::Normal,
         }
@@ -42,6 +43,7 @@ macro_rules! quick_edge {
             required_semver: $req.into(),
             optional: false,
             default_features: false,
+            with_features: Vec::new(),
             target: None,
             kind: CargoDependencyKind::Normal,
         }

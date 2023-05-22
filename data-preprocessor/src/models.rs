@@ -32,6 +32,7 @@ pub struct CargoDependenciesDBResponse {
     pub required_semver: String,
     pub optional: bool,
     pub default_features: bool,
+    pub features: Vec<String>,
     pub target: Option<String>,
     pub kind: CargoDependencyKind,
 }
@@ -43,11 +44,12 @@ pub struct CargoDependencyRGEdgeBuilder {
     pub required_semver: String,
     pub optional: bool,
     pub default_features: bool,
+    pub with_features: Vec<String>,
     pub target: Option<String>,
     pub kind: CargoDependencyKind,
 }
 
-#[derive(Debug, Clone, PartialEq, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, sqlx::Type, serde::Serialize)]
 #[repr(i32)]
 pub enum CargoDependencyKind {
     Normal = 0,

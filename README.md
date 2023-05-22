@@ -16,6 +16,10 @@
   - `psql dumpdb -U dumpuser < schema.sql`
   - `psql dumpdb -U dumpuser < import.sql`
 
+#### Continue after shutdown
+
+- `docker start deps-graph-cargo-db-dump-container`
+
 #### Shutdown / cleanup
 
 - Go into `./data-dumps/cargo/`
@@ -28,11 +32,15 @@
 
 ### Redisgraph
 
-#### Startup
+#### Setup
 
 - Go into `./data-dump/redisgraph/`
   - `docker run -it --name deps-graph-redisgraph -d -p 7500:6379 -v "$(pwd)/db-container-data/:/data" redislabs/redisgraph:2.12.1`
   - If you want to try out running in constrained enviroment, add following flags: `--memory="1g" --memory-swap="9g"` before `-d` flag in the previous command
+
+#### Continue after shutdown
+
+- `docker start deps-graph-redisgraph`
 
 #### Shutdown / cleanup
 
