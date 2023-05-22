@@ -11,7 +11,8 @@ use utils::{get_crate_versions_from_db_async, get_crates_from_db_async, get_user
 use crate::utils::{
     connect_db_dependencies, gen_crate_versions_redis_graph_node_query,
     gen_crates_redis_graph_node_query, gen_published_by_redis_graph_link_query,
-    gen_users_redis_graph_node_query, get_raw_dependencies_from_db_async,
+    gen_users_redis_graph_node_query, gen_version_redis_graph_link_query,
+    get_raw_dependencies_from_db_async,
 };
 
 #[tokio::main]
@@ -87,8 +88,11 @@ async fn main() -> Result<()> {
     // Relations
     let mut published_by_graph_link_query =
         gen_published_by_redis_graph_link_query(&crate_versions)?;
+    let mut versions_link_to_crates_graph_link_query =
+        gen_version_redis_graph_link_query(&crate_versions)?;
 
     queries.append(&mut published_by_graph_link_query);
+    queries.append(&mut versions_link_to_crates_graph_link_query);
 
     log_debug!("Done generating redisgraph queries from data.");
 

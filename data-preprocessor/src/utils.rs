@@ -127,7 +127,22 @@ pub fn gen_published_by_redis_graph_link_query(
                 json!(s.id)
             )
         }).collect(), 
-        Some("MATCH (u:CargoUser {id: map[0]}), (cv:CargoCrateVersion {id: map[1]}) CREATE (u)-[:PUBLISHED]->(cv)")
+        Some("MATCH (cu:CargoUser {id: map[0]}), (cv:CargoCrateVersion {id: map[1]}) CREATE (cu)-[:PUBLISHED]->(cv)")
+    )
+}
+
+pub fn gen_version_redis_graph_link_query(
+    crate_versions: &[CargoCrateVersionDBResponse],
+) -> anyhow::Result<Vec<String>> {
+    gen_redis_creation_command(
+        crate_versions.iter().map(|s| {
+            format!(
+                "[{}, {}]",
+                json!(s.crate_id), 
+                json!(s.id)
+            )
+        }).collect(), 
+        Some("MATCH (cc:CargoCrate {id: map[0]}), (cv:CargoCrateVersion {id: map[1]}) CREATE (cc)-[:VERSION]->(cv)")
     )
 }
 
