@@ -22,6 +22,7 @@ pub struct CargoCrateVersionDBResponse {
     pub num: String,
     pub features: sqlx::types::Json<HashMap<String, Vec<String>>>,
     // TODO: Add description, repository, documentation and homepage (make sure to update sql and redis commands)
+    pub published_by: Option<i32>,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -34,16 +35,9 @@ pub struct CargoDependenciesDBResponse {
     pub target: Option<String>,
     pub kind: CargoDependencyKind,
 }
-#[derive(Debug, Clone, PartialEq, sqlx::Type)]
-#[repr(i32)]
-pub enum CargoDependencyKind {
-    Normal = 0,
-    Build = 1,
-    Dev = 2,
-}
 
 #[derive(Debug, PartialEq)]
-pub struct CargoDependencyRGEdge {
+pub struct CargoDependencyRGEdgeBuilder {
     pub from_version_id: i32,
     pub to_version_id: i32,
     pub required_semver: String,
@@ -51,4 +45,12 @@ pub struct CargoDependencyRGEdge {
     pub default_features: bool,
     pub target: Option<String>,
     pub kind: CargoDependencyKind,
+}
+
+#[derive(Debug, Clone, PartialEq, sqlx::Type)]
+#[repr(i32)]
+pub enum CargoDependencyKind {
+    Normal = 0,
+    Build = 1,
+    Dev = 2,
 }

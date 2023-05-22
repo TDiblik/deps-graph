@@ -9,8 +9,9 @@ use sqlx::postgres::PgPoolOptions;
 use utils::{get_crate_versions_from_db_async, get_crates_from_db_async, get_users_from_db_async};
 
 use crate::utils::{
-    connect_db_dependencies, gen_crate_versions_redis_graph_query, gen_crates_redis_graph_query,
-    gen_users_redis_graph_query, get_raw_dependencies_from_db_async,
+    connect_db_dependencies, gen_crate_versions_redis_graph_node_query,
+    gen_crates_redis_graph_node_query, gen_published_by_redis_graph_link_query,
+    gen_users_redis_graph_node_query, get_raw_dependencies_from_db_async,
 };
 
 #[tokio::main]
@@ -73,14 +74,21 @@ async fn main() -> Result<()> {
 
     let mut queries = Vec::new();
 
-    let mut users_redis_graph_query = gen_users_redis_graph_query(users)?;
-    let mut crates_redis_graph_query = gen_crates_redis_graph_query(crates)?;
+    // Nodes
+    let mut users_redis_graph_query = gen_users_redis_graph_node_query(&users)?;
+    let mut crates_redis_graph_query = gen_crates_redis_graph_node_query(&crates)?;
     let mut crate_versions_redis_graph_query =
-        gen_crate_versions_redis_graph_query(crate_versions)?;
+        gen_crate_versions_redis_graph_node_query(&crate_versions)?;
 
     queries.append(&mut users_redis_graph_query);
     queries.append(&mut crates_redis_graph_query);
     queries.append(&mut crate_versions_redis_graph_query);
+
+    // Relations
+    let mut published_by_graph_link_query =
+        gen_published_by_redis_graph_link_query(&crate_versions)?;
+
+    queries.append(&mut published_by_graph_link_query);
 
     log_debug!("Done generating redisgraph queries from data.");
 

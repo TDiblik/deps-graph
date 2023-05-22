@@ -9,7 +9,7 @@ use crate::{
     constants::REDIS_INSERTION_CHUNK_SIZE,
     models::{
         CargoCrateDBResponse, CargoCrateVersionDBResponse, CargoDependenciesDBResponse,
-        CargoDependencyRGEdge, CargoUserDBResponse,
+        CargoDependencyRGEdgeBuilder, CargoUserDBResponse,
     },
 };
 
@@ -48,7 +48,7 @@ pub fn get_crate_versions_from_db_async(
 ) -> impl Future<Output = Result<Vec<CargoCrateVersionDBResponse>, sqlx::Error>> + '_ {
     sqlx::query_as::<_, CargoCrateVersionDBResponse>(
         r#"
-            select id, crate_id, num, features from versions order by id;
+            select id, crate_id, num, features, published_by from versions order by id;
         "#,
     )
     .fetch_all(pool)
@@ -65,7 +65,7 @@ pub fn get_raw_dependencies_from_db_async(
     .fetch_all(pool)
 }
 
-pub fn gen_users_redis_graph_query(users: Vec<CargoUserDBResponse>) -> anyhow::Result<Vec<String>> {
+pub fn gen_users_redis_graph_node_query(users: &[CargoUserDBResponse]) -> anyhow::Result<Vec<String>> {
     gen_redis_creation_command(
         users
             .iter()
@@ -85,8 +85,8 @@ pub fn gen_users_redis_graph_query(users: Vec<CargoUserDBResponse>) -> anyhow::R
     )
 }
 
-pub fn gen_crates_redis_graph_query(
-    crates: Vec<CargoCrateDBResponse>,
+pub fn gen_crates_redis_graph_node_query(
+    crates: &[CargoCrateDBResponse],
 ) -> anyhow::Result<Vec<String>> {
     gen_redis_creation_command(
         crates
@@ -97,8 +97,8 @@ pub fn gen_crates_redis_graph_query(
     )
 }
 
-pub fn gen_crate_versions_redis_graph_query(
-    crate_versions: Vec<CargoCrateVersionDBResponse>,
+pub fn gen_crate_versions_redis_graph_node_query(
+    crate_versions: &[CargoCrateVersionDBResponse],
 ) -> anyhow::Result<Vec<String>> {
     gen_redis_creation_command(
         crate_versions
@@ -113,6 +113,21 @@ pub fn gen_crate_versions_redis_graph_query(
             })
             .collect(),
         Some("create (:CargoCrateVersion {id: map[0], num: map[1], features: map[2]})"),
+    )
+}
+
+pub fn gen_published_by_redis_graph_link_query(
+    crate_versions: &[CargoCrateVersionDBResponse],
+) -> anyhow::Result<Vec<String>> {
+    gen_redis_creation_command(
+        crate_versions.iter().filter(|s| s.published_by.is_some()).map(|s| {
+            format!(
+                "[{}, {}]",
+                json!(s.published_by.unwrap()), 
+                json!(s.id)
+            )
+        }).collect(), 
+        Some("MATCH (u:CargoUser {id: map[0]}), (cv:CargoCrateVersion {id: map[1]}) CREATE (u)-[:PUBLISHED]->(cv)")
     )
 }
 
@@ -146,7 +161,7 @@ struct VersionCacher<'a> {
 pub fn connect_db_dependencies(
     db_crate_versions: &Vec<CargoCrateVersionDBResponse>,
     db_dependencies: &Vec<CargoDependenciesDBResponse>,
-) -> Vec<CargoDependencyRGEdge> {
+) -> Vec<CargoDependencyRGEdgeBuilder> {
     // Cache crate versions
     let mut version_hashmap: HashMap<i32, Vec<VersionCacher>> = HashMap::new();
     for version in db_crate_versions {
@@ -183,7 +198,7 @@ pub fn connect_db_dependencies(
         }
 
         if let Some(pick) = best_possible_pick {
-            dependency_edges.push(CargoDependencyRGEdge {
+            dependency_edges.push(CargoDependencyRGEdgeBuilder {
                 from_version_id: dep.from_version_id,
                 to_version_id: pick.id,
                 required_semver: dep.required_semver.clone(),
@@ -203,7 +218,7 @@ mod tests {
 
     use crate::models::{
         CargoCrateVersionDBResponse, CargoDependenciesDBResponse, CargoDependencyKind,
-        CargoDependencyRGEdge,
+        CargoDependencyRGEdgeBuilder,
     };
 
     use super::connect_db_dependencies;
@@ -217,6 +232,7 @@ mod tests {
                 crate_id: $crate_id,
                 num: $num.into(),
                 features: sqlx::types::Json(HashMap::new()),
+                published_by: None,
             }
         };
     }
@@ -237,7 +253,7 @@ mod tests {
 
     macro_rules! quick_edge {
         ($to:expr, $req:expr) => {
-            CargoDependencyRGEdge {
+            CargoDependencyRGEdgeBuilder {
                 from_version_id: 1,
                 to_version_id: $to,
                 required_semver: $req.into(),
@@ -258,12 +274,12 @@ mod tests {
         ];
 
         let db_dependencies_1 = vec![quick_dependency![1, "^1.0.0"]];
-        let expected_output_1: Vec<CargoDependencyRGEdge> = vec![quick_edge![3, "^1.0.0"]];
+        let expected_output_1: Vec<CargoDependencyRGEdgeBuilder> = vec![quick_edge![3, "^1.0.0"]];
         let output_1 = connect_db_dependencies(&db_crate_versions, &db_dependencies_1);
         assert_eq!(output_1, expected_output_1);
 
         let db_dependencies_2 = vec![quick_dependency![1, "<=1.0.0"]];
-        let expected_output_2: Vec<CargoDependencyRGEdge> = vec![quick_edge![1, "<=1.0.0"]];
+        let expected_output_2: Vec<CargoDependencyRGEdgeBuilder> = vec![quick_edge![1, "<=1.0.0"]];
         let output_2 = connect_db_dependencies(&db_crate_versions, &db_dependencies_2);
         assert_eq!(output_2, expected_output_2);
     }
@@ -286,7 +302,7 @@ mod tests {
             quick_dependency![2, "~2.0.0"],
         ];
 
-        let expected_output: Vec<CargoDependencyRGEdge> = vec![
+        let expected_output: Vec<CargoDependencyRGEdgeBuilder> = vec![
             quick_edge![3, "^1.0.0"],
             quick_edge![3, ">=1.0.0"],
             quick_edge![1, "~1.0.0"],
