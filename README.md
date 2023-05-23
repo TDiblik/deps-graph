@@ -28,7 +28,7 @@
   - `docker rm {id}`
   - `docker volume ls` -- get id
   - `docker volume rm {id}`
-  - `rm -rf db-container-data`
+  - `rm -rf db-container-data db-dump`
 
 ### Redisgraph
 
