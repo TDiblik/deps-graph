@@ -35,6 +35,20 @@ async fn main() -> Result<()> {
             CARGO_GRAPH_NAME,
             "match (e: Example {name: 'tmp'}) delete e",
         )?;
+
+        // Create indexes
+        redis_conn.graph_query(
+            CARGO_GRAPH_NAME,
+            "CREATE INDEX FOR (c:CargoCrate) ON (c.id)",
+        )?;
+        redis_conn.graph_query(
+            CARGO_GRAPH_NAME,
+            "CREATE INDEX FOR (c:CargoCrate) ON (c.name)",
+        )?;
+        redis_conn.graph_query(
+            CARGO_GRAPH_NAME,
+            "CREATE INDEX FOR (cv:CargoCrateVersion) ON (cv.id)",
+        )?;
     }
 
     log_debug!("Start fetching data from postgres...");
@@ -65,7 +79,8 @@ async fn main() -> Result<()> {
     // Order of queries matters!
     log_debug!("Generating redisgraph queries from data...");
 
-    let mut queries = Vec::new();
+    let mut queries =
+        Vec::with_capacity(1 + users.len() * 2 + crates.len() + crate_versions.len() * 3); // rough guess
 
     // Nodes
     let mut users_redis_graph_query = gen_users_redis_graph_node_query(&users)?;
