@@ -74,7 +74,7 @@ pub fn gen_users_redis_graph_node_query(
             .map(|s| {
                 format!(
                     "[{},{},{},{}]",
-                    json!(s.id),
+                    s.id,
                     json!(s.gh_username),
                     json!(s.gh_avatar),
                     json!(s.preferred_name)
@@ -93,7 +93,7 @@ pub fn gen_crates_redis_graph_node_query(
     gen_redis_creation_command(
         crates
             .iter()
-            .map(|s| format!("[{},{}]", json!(s.id), json!(s.name),))
+            .map(|s| format!("[{},{}]", s.id, json!(s.name),))
             .collect(),
         Some("create (:CargoCrate {id: map[0], name: map[1]})"),
     )
@@ -108,7 +108,7 @@ pub fn gen_crate_versions_redis_graph_node_query(
             .map(|s| {
                 format!(
                     "[{},{},{}]",
-                    json!(s.id),
+                    s.id,
                     json!(s.num),
                     json!(json!(s.features).to_string()), // TODO: Dump hack, fix
                 )
@@ -125,8 +125,8 @@ pub fn gen_published_by_redis_graph_link_query(
         crate_versions.iter().filter(|s| s.published_by.is_some()).map(|s| {
             format!(
                 "[{}, {}]",
-                json!(s.published_by.unwrap()),
-                json!(s.id)
+                s.published_by.unwrap(),
+                s.id
             )
         }).collect(),
         Some("MATCH (cu:CargoUser {id: map[0]}), (cv:CargoCrateVersion {id: map[1]}) CREATE (cu)-[:PUBLISHED]->(cv)")
@@ -140,8 +140,8 @@ pub fn gen_version_redis_graph_link_query(
         crate_versions.iter().map(|s| {
             format!(
                 "[{}, {}]",
-                json!(s.crate_id),
-                json!(s.id)
+                s.crate_id,
+                s.id
             )
         }).collect(),
         Some("MATCH (cc:CargoCrate {id: map[0]}), (cv:CargoCrateVersion {id: map[1]}) CREATE (cc)-[:VERSION]->(cv)")
@@ -156,13 +156,13 @@ pub fn gen_dependency_redis_graph_link_query(
         dependencies.iter().map(|s| {
             format!(
                 "[{}, {}, {}, {}, {}, {}, {}]",
-                json!(s.from_version_id),
-                json!(s.to_version_id),
-                json!(s.optional),
-                json!(s.default_features),
+                s.from_version_id,
+                s.to_version_id,
+                s.optional,
+                s.default_features,
                 json!(s.with_features),
                 json!(s.target),
-                json!(s.kind),
+                s.kind,
             )
         }).collect(),
         Some("MATCH (cv_from:CargoCrateVersion {id: map[0]}), (cv_to:CargoCrateVersion {id: map[1]}) CREATE (cv_from)-[:DEPENDS_ON {optional: map[2], default_features: map[3], with_features: map[4], target: map[5], kind: map[6]}]->(cv_to)")
