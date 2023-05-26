@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
-use redis::Connection;
+use redis::{streams::StreamInfoConsumer, Connection};
 use redis_graph::{GraphCommands, GraphResult, WithProperties};
 
 fn main() -> anyhow::Result<()> {
@@ -10,12 +10,12 @@ fn main() -> anyhow::Result<()> {
     // let mut to_fetch: VecDeque<> = VecDeque::new();
 
     /*
-       for i in 100_000..110_000 {
-           let answ = redis_conn.graph_ro_query(
-               "cargo_graph",
-               format!("MATCH (cv: CargoCrateVersion {{id: {}}})-[d:DEPENDS_ON]->(cv2:CargoCrateVersion) RETURN d, cv", i),
-           )?;
-       }
+    for i in 140_000..150_000 {
+        let answ = redis_conn.graph_ro_query(
+           "cargo_graph",
+           format!("MATCH (cv: CargoCrateVersion {{id: {}}})-[d:DEPENDS_ON]->(cv2:CargoCrateVersion) RETURN d, cv", i),
+        )?;
+    }
     */
 
     let initial_node_req = redis_conn.graph_ro_query(
@@ -26,35 +26,81 @@ fn main() -> anyhow::Result<()> {
         CargoCrateVersionNode::parse(initial_node_req.data.first().unwrap(), "cv")?;
 
     dbg!(&initial_root_version_node);
-    let a = traverse_node(&mut redis_conn, initial_root_version_node);
-    dbg!(a);
+    let output = traverse_node(
+        &mut redis_conn,
+        initial_root_version_node,
+        vec!["default".into()],
+        true,
+        true,
+        true,
+    );
+    dbg!(output);
 
     Ok(())
 }
 
 fn traverse_node(
     redis_conn: &mut Connection,
+
     root_node: CargoCrateVersionNode,
+    root_traversed_features: Vec<String>,
+
+    include_normal_dependencies: bool,
+    include_dev_dependencies: bool,
+    include_build_dependencies: bool,
 ) -> anyhow::Result<()> {
-    let dependencies_query = redis_conn.graph_ro_query(
-        "cargo_graph",
-        format!(
-            "match (:CargoCrateVersion {{id: {}}})-[d:DEPENDS_ON]->(cv:CargoCrateVersion) return d, cv",
+    let dependencies_query = {
+        let mut query = format!(
+            "match (:CargoCrateVersion {{id: {}}})-[d:DEPENDS_ON]->(cv:CargoCrateVersion) where ",
             root_node.id
-        ),
-    )?;
+        );
+        if include_normal_dependencies {
+            query.push_str("d.kind = 0 or ");
+        }
+        if include_dev_dependencies {
+            query.push_str("d.kind = 1 or ");
+        }
+        if include_build_dependencies {
+            query.push_str("d.kind = 2 or ");
+        }
+        query = query.trim_end_matches("or ").to_owned();
+        query.push_str(" return d, cv");
 
-    let nodes = CargoCrateVersionNode::parse_bulk(&dependencies_query.data, "cv")?;
-    let edges = CargoDependsOnEdge::parse_bulk(&dependencies_query.data, "d")?;
+        query
+    };
 
+    let dependencies_result = redis_conn.graph_ro_query("cargo_graph", dependencies_query)?;
+
+    let nodes = CargoCrateVersionNode::parse_bulk(&dependencies_result.data, "cv")?;
+    let edges = CargoDependsOnEdge::parse_bulk(&dependencies_result.data, "d")?;
+
+    // Keep in mind: root_node -> edge -> dest_node
     for edge in edges {
         let dest_node = nodes
             .iter()
             .find(|s| s.node_id == edge.dest_node_id)
             .unwrap();
+
+        if edge.optional {}
+
+        dbg!(edge);
     }
 
     Ok(())
+}
+
+fn traverse_features(
+    wanted_features: Vec<String>,
+    provided_features: HashMap<String, Vec<String>>,
+    default_features: bool,
+) {
+    let wanted_features = wanted_features.iter().filter(|s| *s != "[]");
+
+    for wanted_feature in wanted_features {
+        let Some(feature_info) = provided_features.get(wanted_feature) else {
+            continue;
+        };
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -71,7 +117,7 @@ struct CargoDependsOnEdge {
     dest_node_id: u64,
 
     optional: bool,
-    with_features: Option<Vec<String>>,
+    with_features: Vec<String>,
     default_features: bool,
     kind: CargoDependencyKind,
 }
