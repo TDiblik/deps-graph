@@ -1,6 +1,9 @@
-use std::collections::{HashMap, VecDeque};
+#![recursion_limit = "9999"] // If package has more than this number of features, something is wrong :DD
 
-use redis::{streams::StreamInfoConsumer, Connection};
+use std::collections::HashMap;
+
+use itertools::Itertools;
+use redis::Connection;
 use redis_graph::{GraphCommands, GraphResult, WithProperties};
 
 fn main() -> anyhow::Result<()> {
@@ -20,7 +23,7 @@ fn main() -> anyhow::Result<()> {
 
     let initial_node_req = redis_conn.graph_ro_query(
         "cargo_graph",
-        "match (cv: CargoCrateVersion {id: 468088}) return cv",
+        "match (cv: CargoCrateVersion {id: 781878}) return cv",
     )?;
     let initial_root_version_node =
         CargoCrateVersionNode::parse(initial_node_req.data.first().unwrap(), "cv")?;
@@ -29,7 +32,12 @@ fn main() -> anyhow::Result<()> {
     let output = traverse_node(
         &mut redis_conn,
         initial_root_version_node,
-        vec!["default".into()],
+        vec![
+            "default".into(),
+            "use_std".into(),
+            "unstable".into(),
+            "pattern".into(),
+        ],
         true,
         true,
         true,
@@ -43,7 +51,7 @@ fn traverse_node(
     redis_conn: &mut Connection,
 
     root_node: CargoCrateVersionNode,
-    root_traversed_features: Vec<String>,
+    root_features: Vec<String>,
 
     include_normal_dependencies: bool,
     include_dev_dependencies: bool,
@@ -68,39 +76,88 @@ fn traverse_node(
 
         query
     };
-
     let dependencies_result = redis_conn.graph_ro_query("cargo_graph", dependencies_query)?;
-
     let nodes = CargoCrateVersionNode::parse_bulk(&dependencies_result.data, "cv")?;
     let edges = CargoDependsOnEdge::parse_bulk(&dependencies_result.data, "d")?;
 
-    // Keep in mind: root_node -> edge -> dest_node
-    for edge in edges {
-        let dest_node = nodes
+    // TODO: To make this more performant, take nodes and edges and combine them into touple of references and then after I'm finished with them, separate them again.
+
+    // All non-optional edges are active right away.
+    let mut activated_nodes = vec![];
+    let mut activated_edges = vec![];
+    for edge in edges.iter() {
+        if !edge.optional {
+            activated_nodes.push(
+                nodes
+                    .iter()
+                    .find(|s| edge.dest_node_id == s.node_id)
+                    .unwrap(), // This can never be None
+            );
+            activated_edges.push(edge);
+        }
+    }
+
+    let mut traversed_features = vec![];
+    for wanted_feature in root_features {
+        traversed_features.extend(traverse_feature(wanted_feature, &root_node.features));
+    }
+    let filtered_features = traversed_features.iter().unique();
+
+    let activating_features = filtered_features.clone().filter(|s| !s.contains("?/"));
+    for feature in activating_features {
+        let package_to_activate = if feature.contains('/') {
+            feature.split('/').next().unwrap()
+        } else if feature.contains(':') {
+            feature.trim_start_matches("dep:")
+        } else {
+            feature
+        };
+
+        let Some(node_to_activate) = nodes
             .iter()
-            .find(|s| s.node_id == edge.dest_node_id)
+            .find(|s| s.crate_name == package_to_activate)// TODO: ADD
+            else {
+                continue
+            };
+
+        let edge_to_active = edges
+            .iter()
+            .find(|s| s.dest_node_id == node_to_activate.node_id)
             .unwrap();
 
-        if edge.optional {}
-
-        dbg!(edge);
+        activated_nodes.push(node_to_activate);
+        activated_edges.push(edge_to_active);
     }
+
+    let possibly_activating_features = filtered_features.filter(|s| s.contains("?/"));
 
     Ok(())
 }
 
-fn traverse_features(
-    wanted_features: Vec<String>,
-    provided_features: HashMap<String, Vec<String>>,
-    default_features: bool,
-) {
-    let wanted_features = wanted_features.iter().filter(|s| *s != "[]");
+fn traverse_feature(
+    wanted_feature: String,
+    provided_features: &HashMap<String, Vec<String>>,
+) -> Vec<String> {
+    let Some(feature_array) = provided_features.get(&wanted_feature) else {
+        return vec![wanted_feature];
+    };
 
-    for wanted_feature in wanted_features {
-        let Some(feature_info) = provided_features.get(wanted_feature) else {
-            continue;
-        };
+    let mut traversed_features = vec![];
+    for feature in feature_array {
+        // Catches "dep:example" ; "dep/example" ; "dep?/example"
+        if feature.contains(':') || feature.contains('/') {
+            traversed_features.push(feature.clone());
+        } else {
+            traversed_features.extend(traverse_feature(feature.clone(), provided_features));
+        }
     }
+
+    traversed_features
+}
+
+struct DependencyGraph {
+    nodes: Vec<CargoCrateVersionNode>,
+    edges: Vec<CargoDependsOnEdge>,
 }
 
 #[derive(Debug, Clone)]
