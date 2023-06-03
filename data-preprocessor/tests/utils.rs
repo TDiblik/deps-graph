@@ -16,6 +16,7 @@ macro_rules! quick_crate_version {
             num: $num.into(),
             features: sqlx::types::Json(HashMap::new()),
             published_by: None,
+            crate_name: "".into(),
         }
     };
 }

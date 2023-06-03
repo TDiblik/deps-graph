@@ -32,12 +32,7 @@ fn main() -> anyhow::Result<()> {
     let output = traverse_node(
         &mut redis_conn,
         initial_root_version_node,
-        vec![
-            "default".into(),
-            "use_std".into(),
-            "unstable".into(),
-            "pattern".into(),
-        ],
+        vec!["default".into()],
         true,
         true,
         true,
@@ -51,12 +46,12 @@ fn traverse_node(
     redis_conn: &mut Connection,
 
     root_node: CargoCrateVersionNode,
-    root_features: Vec<String>,
+    wanted_features: Vec<String>,
 
     include_normal_dependencies: bool,
     include_dev_dependencies: bool,
     include_build_dependencies: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<GraphConnection>> {
     let dependencies_query = {
         let mut query = format!(
             "match (:CargoCrateVersion {{id: {}}})-[d:DEPENDS_ON]->(cv:CargoCrateVersion) where ",
@@ -80,58 +75,107 @@ fn traverse_node(
     let nodes = CargoCrateVersionNode::parse_bulk(&dependencies_result.data, "cv")?;
     let edges = CargoDependsOnEdge::parse_bulk(&dependencies_result.data, "d")?;
 
-    // TODO: To make this more performant, take nodes and edges and combine them into touple of references and then after I'm finished with them, separate them again.
-
-    // All non-optional edges are active right away.
-    let mut activated_nodes = vec![];
-    let mut activated_edges = vec![];
+    let mut connections: Vec<GraphConnection> = vec![];
     for edge in edges.iter() {
-        if !edge.optional {
-            activated_nodes.push(
-                nodes
-                    .iter()
-                    .find(|s| edge.dest_node_id == s.node_id)
-                    .unwrap(), // This can never be None
-            );
-            activated_edges.push(edge);
+        connections.push(GraphConnection {
+            edge: edge.clone(),
+            node: nodes
+                .iter()
+                .find(|s| s.node_id == edge.dest_node_id)
+                .unwrap()
+                .clone(),
+        });
+    }
+
+    let mut activated_connections: Vec<GraphConnection> = vec![];
+
+    // All non-optional connection should be active right away.
+    for connection in connections.iter() {
+        if !connection.edge.optional {
+            activated_connections.push(connection.clone());
         }
     }
 
     let mut traversed_features = vec![];
-    for wanted_feature in root_features {
+    for wanted_feature in wanted_features {
         traversed_features.extend(traverse_feature(wanted_feature, &root_node.features));
     }
     let filtered_features = traversed_features.iter().unique();
 
-    let activating_features = filtered_features.clone().filter(|s| !s.contains("?/"));
-    for feature in activating_features {
-        let package_to_activate = if feature.contains('/') {
-            feature.split('/').next().unwrap()
-        } else if feature.contains(':') {
+    // If needed (performance reasons), the following 2 loops could be put inside one loop,
+    // however the functionality is much clearer when it's written this way.
+    // TODO: It could be a good idea to rewrite it after I put some tests in place as guardrails.
+    let dep_features = filtered_features.clone().filter(|s| !s.contains('/'));
+    for feature in dep_features {
+        let package_to_activate = if feature.contains(':') {
             feature.trim_start_matches("dep:")
         } else {
             feature
         };
+        for connection in connections.iter() {
+            if connection.node.crate_name == package_to_activate
+                && !activated_connections
+                    .iter()
+                    .any(|s| s.node.node_id == connection.node.node_id)
+            {
+                activated_connections.push(connection.clone());
+            }
+        }
+    }
 
-        let Some(node_to_activate) = nodes
-            .iter()
-            .find(|s| s.crate_name == package_to_activate)// TODO: ADD
-            else {
-                continue
-            };
+    let activate_features = filtered_features
+        .clone()
+        .filter(|s| s.contains('/') && !s.contains("?/"));
+    for feature in activate_features {
+        let mut package_part_split = feature.split('/');
+        let package_to_activate = package_part_split.next().unwrap();
+        let feature_to_add = package_part_split.next().unwrap();
 
-        let edge_to_active = edges
-            .iter()
-            .find(|s| s.dest_node_id == node_to_activate.node_id)
-            .unwrap();
+        for connection in connections.iter() {
+            if connection.node.crate_name != package_to_activate {
+                continue;
+            }
 
-        activated_nodes.push(node_to_activate);
-        activated_edges.push(edge_to_active);
+            if !activated_connections
+                .iter()
+                .any(|s| s.node.node_id == connection.node.node_id)
+            {
+                activated_connections.push(connection.clone());
+            }
+
+            activated_connections
+                .iter_mut()
+                .find(|s| s.edge.dest_node_id == connection.edge.dest_node_id)
+                .unwrap()
+                .edge
+                .with_features
+                .push(feature_to_add.to_string());
+        }
     }
 
     let possibly_activating_features = filtered_features.filter(|s| s.contains("?/"));
+    for feature in possibly_activating_features {
+        let mut package_part_split = feature.split("?/");
+        let possibly_active_package = package_part_split.next().unwrap();
+        let feature_to_add = package_part_split.next().unwrap();
 
-    Ok(())
+        for connection in connections.iter() {
+            if connection.node.crate_name != possibly_active_package {
+                continue;
+            }
+
+            let Some(active_connection) = activated_connections.iter_mut().find(|s| s.node.node_id == connection.node.node_id) else {
+                continue;
+            };
+
+            active_connection
+                .edge
+                .with_features
+                .push(feature_to_add.to_string());
+        }
+    }
+
+    Ok(activated_connections)
 }
 
 fn traverse_feature(
@@ -155,9 +199,10 @@ fn traverse_feature(
     traversed_features
 }
 
-struct DependencyGraph {
-    nodes: Vec<CargoCrateVersionNode>,
-    edges: Vec<CargoDependsOnEdge>,
+#[derive(Debug, Clone)]
+struct GraphConnection {
+    edge: CargoDependsOnEdge,
+    node: CargoCrateVersionNode,
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +212,7 @@ struct CargoCrateVersionNode {
     id: i32,
     num: String,
     features: HashMap<String, Vec<String>>,
+    crate_name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +263,7 @@ impl RedisGraphParser for CargoCrateVersionNode {
             id: node.get_property("id")?.unwrap(),
             num: node.get_property("num")?.unwrap(),
             features: serde_json::from_str(&node.get_property::<String>("features")?.unwrap())?,
+            crate_name: node.get_property("crate_name")?.unwrap(),
         })
     }
 }

@@ -48,7 +48,7 @@ pub fn get_crate_versions_from_db_async(
 ) -> impl Future<Output = Result<Vec<CargoCrateVersionDBResponse>, sqlx::Error>> + '_ {
     sqlx::query_as::<_, CargoCrateVersionDBResponse>(
         r#"
-            select id, crate_id, num, features, published_by from versions order by id;
+            select v.id, v.crate_id, v.num, v.features, v.published_by, c.name as crate_name from versions v left join crates c on v.crate_id = c.id order by v.id;
         "#,
     )
     .fetch_all(pool)
@@ -107,14 +107,15 @@ pub fn gen_crate_versions_redis_graph_node_query(
             .iter()
             .map(|s| {
                 format!(
-                    "[{},{},{}]",
+                    "[{},{},{}, {}]",
                     s.id,
                     json!(s.num),
                     json!(json!(s.features).to_string()), // TODO: Dump hack, fix
+                    json!(s.crate_name)
                 )
             })
             .collect(),
-        Some("create (:CargoCrateVersion {id: map[0], num: map[1], features: map[2]})"),
+        Some("create (:CargoCrateVersion {id: map[0], num: map[1], features: map[2], crate_name: map[3]})"),
     )
 }
 

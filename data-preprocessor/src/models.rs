@@ -23,6 +23,7 @@ pub struct CargoCrateVersionDBResponse {
     pub features: sqlx::types::Json<HashMap<String, Vec<String>>>,
     // TODO: Add description, repository, documentation and homepage (make sure to update sql and redis commands)
     pub published_by: Option<i32>,
+    pub crate_name: String,
 }
 
 #[derive(Debug, sqlx::FromRow)]
