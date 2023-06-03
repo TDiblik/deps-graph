@@ -1,6 +1,6 @@
 #![recursion_limit = "9999"] // If package has more than this number of features, something is wrong :DD
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use itertools::Itertools;
 use redis::Connection;
@@ -10,17 +10,6 @@ fn main() -> anyhow::Result<()> {
     let redis_client = redis::Client::open("redis://127.0.0.1:7500/")?;
     let mut redis_conn = redis_client.get_connection()?;
 
-    // let mut to_fetch: VecDeque<> = VecDeque::new();
-
-    /*
-    for i in 140_000..150_000 {
-        let answ = redis_conn.graph_ro_query(
-           "cargo_graph",
-           format!("MATCH (cv: CargoCrateVersion {{id: {}}})-[d:DEPENDS_ON]->(cv2:CargoCrateVersion) RETURN d, cv", i),
-        )?;
-    }
-    */
-
     let initial_node_req = redis_conn.graph_ro_query(
         "cargo_graph",
         "match (cv: CargoCrateVersion {id: 781878}) return cv",
@@ -28,16 +17,48 @@ fn main() -> anyhow::Result<()> {
     let initial_root_version_node =
         CargoCrateVersionNode::parse(initial_node_req.data.first().unwrap(), "cv")?;
 
-    dbg!(&initial_root_version_node);
-    let output = traverse_node(
-        &mut redis_conn,
-        initial_root_version_node,
-        vec!["default".into()],
-        true,
-        true,
-        true,
-    );
-    dbg!(output);
+    let mut connections_to_traverse = Vec::new();
+    connections_to_traverse.push(GraphConnection {
+        edge: CargoDependsOnEdge {
+            src_node_id: 0,
+            dest_node_id: initial_root_version_node.node_id,
+            optional: false,
+            with_features: vec![],
+            default_features: true,
+            kind: CargoDependencyKind::Normal,
+        },
+        node: initial_root_version_node,
+    });
+
+    let mut traversed_nodes: Vec<CargoCrateVersionNode> = vec![];
+    let mut traversed_edges: Vec<CargoDependsOnEdge> = vec![];
+    while let Some(connection_to_traverse) = connections_to_traverse.pop() {
+        let traversed_connections = traverse_node(
+            &mut redis_conn,
+            connection_to_traverse.node,
+            connection_to_traverse.edge.with_features,
+            true,
+            true,
+            true,
+        )?;
+
+        for traversed_connection in traversed_connections.clone() {
+            if let Some(already_traversed_node) = traversed_nodes
+                .iter()
+                .find(|s| s.node_id == traversed_connection.node.node_id)
+            {
+                let mut edge_to_add = traversed_connection.edge.clone();
+                edge_to_add.dest_node_id = already_traversed_node.node_id;
+                traversed_edges.push(edge_to_add);
+            } else {
+                traversed_nodes.push(traversed_connection.node.clone());
+                traversed_edges.push(traversed_connection.edge.clone());
+                connections_to_traverse.push(traversed_connection);
+            };
+        }
+
+        dbg!(connections_to_traverse.len());
+    }
 
     Ok(())
 }
@@ -49,8 +70,8 @@ fn traverse_node(
     wanted_features: Vec<String>,
 
     include_normal_dependencies: bool,
-    include_dev_dependencies: bool,
     include_build_dependencies: bool,
+    include_dev_dependencies: bool,
 ) -> anyhow::Result<Vec<GraphConnection>> {
     let dependencies_query = {
         let mut query = format!(
@@ -60,10 +81,10 @@ fn traverse_node(
         if include_normal_dependencies {
             query.push_str("d.kind = 0 or ");
         }
-        if include_dev_dependencies {
+        if include_build_dependencies {
             query.push_str("d.kind = 1 or ");
         }
-        if include_build_dependencies {
+        if include_dev_dependencies {
             query.push_str("d.kind = 2 or ");
         }
         query = query.trim_end_matches("or ").to_owned();
@@ -217,6 +238,7 @@ struct CargoCrateVersionNode {
 
 #[derive(Debug, Clone)]
 struct CargoDependsOnEdge {
+    src_node_id: u64,
     dest_node_id: u64,
 
     optional: bool,
@@ -276,6 +298,7 @@ impl RedisGraphParser for CargoDependsOnEdge {
         let edge = input.get_relation(data_variable_name).unwrap();
 
         Ok(CargoDependsOnEdge {
+            src_node_id: edge.src_node,
             dest_node_id: edge.dest_node,
             optional: edge.get_property::<String>("optional")?.unwrap().parse()?,
             with_features: edge.get_property("with_features")?.unwrap(),
