@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 
 use itertools::Itertools;
-use redis::Connection;
-use redis_graph::GraphCommands;
+use redis::aio::Connection;
+use redis_graph::AsyncGraphCommands;
 
 use crate::models::cargo_db_types::{
     CargoCrateVersionNode, CargoDependencyKind, CargoDependsOnEdge, RedisGraphParser,
 };
 
-pub fn traverse_tree(
+use super::constants::CARGO_GRAPH_NAME;
+
+pub async fn traverse_tree(
     redis_conn: &mut Connection,
 
     root_node: CargoCrateVersionNode,
@@ -46,7 +48,8 @@ pub fn traverse_tree(
             include_normal_dependencies,
             include_build_dependencies,
             include_dev_dependencies,
-        )?;
+        )
+        .await?;
 
         for traversed_connection in traversed_connections.clone() {
             if let Some(already_traversed_node) = traversed_nodes
@@ -69,7 +72,7 @@ pub fn traverse_tree(
     Ok((traversed_nodes, traversed_edges))
 }
 
-fn traverse_node(
+async fn traverse_node(
     redis_conn: &mut Connection,
 
     root_node: CargoCrateVersionNode,
@@ -98,7 +101,9 @@ fn traverse_node(
 
         query
     };
-    let dependencies_result = redis_conn.graph_ro_query("cargo_graph", dependencies_query)?;
+    let dependencies_result = redis_conn
+        .graph_ro_query(CARGO_GRAPH_NAME, dependencies_query)
+        .await?;
     let nodes = CargoCrateVersionNode::parse_bulk(&dependencies_result.data, "cv")?;
     let edges = CargoDependsOnEdge::parse_bulk(&dependencies_result.data, "d")?;
 

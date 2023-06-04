@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-struct AppError(anyhow::Error);
+pub struct AppError(anyhow::Error);
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {

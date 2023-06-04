@@ -1,38 +1,64 @@
-use axum::{
-    extract::{Path, State},
-    routing::get,
-    Router,
+use crate::{
+    models::cargo_db_types::{CargoCrateVersionNode, RedisGraphParser},
+    utils::{app_error::AppError, cargo::traverse_tree, constants::CARGO_GRAPH_NAME},
+    AppState,
 };
-use bb8_redis::redis::Connection;
-
-use crate::utils::cargo::traverse_tree;
-
-type ConnectionPool = bb8::Pool<bb8_redis::RedisConnectionManager>;
+use axum::{
+    extract::{Path, Query, State},
+    routing::get,
+    Json, Router,
+};
+use redis::aio::Connection;
+use redis_graph::AsyncGraphCommands;
+use serde::Deserialize;
+use serde_json::{json, Value};
 
 pub struct CargoRouter {}
 impl CargoRouter {
-    pub fn init(pool: ConnectionPool) -> Router {
+    pub fn init(app_state: AppState) -> Router {
         Router::new().nest(
             "/cargo/",
             Router::new()
                 .route("/crate/v/:version_id/traverse", get(traverse_version))
-                .with_state(pool),
+                .with_state(app_state),
         )
     }
 }
 
-async fn traverse_version(Path(id): Path<u32>, State(pool): State<ConnectionPool>) -> &'static str {
-    let mut conn: Connection = pool.get().await.unwrap();
+#[derive(Deserialize)]
+struct TraverseVersionQueryOptions {
+    root_features: Option<Vec<String>>,
+    root_include_default_features: Option<bool>,
 
-    let reply: String = bb8_redis::redis::cmd("PING")
-        .query_async(&mut &*conn)
-        .await
-        .unwrap();
-
-    // let answ = traverse_tree();
-    "Hello, world!"
+    include_normal_dependencies: Option<bool>,
+    include_build_dependencies: Option<bool>,
+    include_dev_dependencies: Option<bool>,
 }
+async fn traverse_version(
+    Path(id): Path<u32>,
+    Query(query): Query<TraverseVersionQueryOptions>,
+    State(app_state): State<AppState>,
+) -> Result<Json<Value>, AppError> {
+    let mut redis_conn: Connection = app_state.get_redis_conn().await?;
 
-async fn handler() -> &'static str {
-    "Hello, world!"
+    let root_node_req = redis_conn
+        .graph_ro_query(
+            CARGO_GRAPH_NAME,
+            format!("match (cv: CargoCrateVersion {{id: {id}}}) return cv"),
+        )
+        .await?;
+    let root_node = CargoCrateVersionNode::parse(root_node_req.data.first().unwrap(), "cv")?;
+
+    let answ = traverse_tree(
+        &mut redis_conn,
+        root_node,
+        query.root_features.unwrap_or(vec![]),
+        query.root_include_default_features.unwrap_or(true),
+        query.include_normal_dependencies.unwrap_or(true),
+        query.include_build_dependencies.unwrap_or(false),
+        query.include_dev_dependencies.unwrap_or(false),
+    )
+    .await?;
+
+    Ok(Json(json!(answ)))
 }

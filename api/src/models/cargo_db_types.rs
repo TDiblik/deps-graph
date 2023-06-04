@@ -1,8 +1,9 @@
 use redis_graph::{GraphResult, WithProperties};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // Models
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CargoCrateVersionNode {
     pub node_id: u64,
 
@@ -12,7 +13,7 @@ pub struct CargoCrateVersionNode {
     pub crate_name: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CargoDependsOnEdge {
     pub src_node_id: u64,
     pub dest_node_id: u64,
@@ -23,7 +24,7 @@ pub struct CargoDependsOnEdge {
 }
 
 // Helper types
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[repr(i32)]
 pub enum CargoDependencyKind {
     Normal = 0,
