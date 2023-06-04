@@ -43,7 +43,6 @@ macro_rules! quick_edge {
             to_version_id: $to,
             required_semver: $req.into(),
             optional: false,
-            default_features: false,
             with_features: Vec::new(),
             target: None,
             kind: CargoDependencyKind::Normal,

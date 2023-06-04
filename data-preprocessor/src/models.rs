@@ -44,7 +44,6 @@ pub struct CargoDependencyRGEdgeBuilder {
     pub to_version_id: i32,
     pub required_semver: String,
     pub optional: bool,
-    pub default_features: bool,
     pub with_features: Vec<String>,
     pub target: Option<String>,
     pub kind: CargoDependencyKind,

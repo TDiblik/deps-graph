@@ -1,44 +1,51 @@
-#![recursion_limit = "9999"] // If package has more than this number of features, something is wrong :DD
-
 use std::collections::HashMap;
 
 use itertools::Itertools;
 use redis::Connection;
-use redis_graph::{GraphCommands, GraphResult, WithProperties};
+use redis_graph::GraphCommands;
 
-fn main() -> anyhow::Result<()> {
-    let redis_client = redis::Client::open("redis://127.0.0.1:7500/")?;
-    let mut redis_conn = redis_client.get_connection()?;
+use crate::models::cargo_db_types::{
+    CargoCrateVersionNode, CargoDependencyKind, CargoDependsOnEdge, RedisGraphParser,
+};
 
-    let initial_node_req = redis_conn.graph_ro_query(
-        "cargo_graph",
-        "match (cv: CargoCrateVersion {id: 781878}) return cv",
-    )?;
-    let initial_root_version_node =
-        CargoCrateVersionNode::parse(initial_node_req.data.first().unwrap(), "cv")?;
+pub fn traverse_tree(
+    redis_conn: &mut Connection,
+
+    root_node: CargoCrateVersionNode,
+    root_features: Vec<String>,
+    root_include_default_features: bool,
+
+    include_normal_dependencies: bool,
+    include_build_dependencies: bool,
+    include_dev_dependencies: bool,
+) -> anyhow::Result<(Vec<CargoCrateVersionNode>, Vec<CargoDependsOnEdge>)> {
+    let mut wanted_features = root_features;
+    if root_include_default_features {
+        wanted_features.push("default".to_owned());
+    }
 
     let mut connections_to_traverse = Vec::new();
     connections_to_traverse.push(GraphConnection {
         edge: CargoDependsOnEdge {
-            src_node_id: 0,
-            dest_node_id: initial_root_version_node.node_id,
+            src_node_id: u64::MAX, // u64::MAX == root
+            dest_node_id: root_node.node_id,
             optional: false,
             with_features: vec![],
             kind: CargoDependencyKind::Normal,
         },
-        node: initial_root_version_node,
+        node: root_node,
     });
 
     let mut traversed_nodes: Vec<CargoCrateVersionNode> = vec![];
     let mut traversed_edges: Vec<CargoDependsOnEdge> = vec![];
     while let Some(connection_to_traverse) = connections_to_traverse.pop() {
         let traversed_connections = traverse_node(
-            &mut redis_conn,
+            redis_conn,
             connection_to_traverse.node,
             connection_to_traverse.edge.with_features,
-            true,
-            true,
-            true,
+            include_normal_dependencies,
+            include_build_dependencies,
+            include_dev_dependencies,
         )?;
 
         for traversed_connection in traversed_connections.clone() {
@@ -59,7 +66,7 @@ fn main() -> anyhow::Result<()> {
         dbg!(connections_to_traverse.len());
     }
 
-    Ok(())
+    Ok((traversed_nodes, traversed_edges))
 }
 
 fn traverse_node(
@@ -223,103 +230,4 @@ fn traverse_feature(
 struct GraphConnection {
     edge: CargoDependsOnEdge,
     node: CargoCrateVersionNode,
-}
-
-#[derive(Debug, Clone)]
-struct CargoCrateVersionNode {
-    node_id: u64,
-
-    id: i32,
-    num: String,
-    features: HashMap<String, Vec<String>>,
-    crate_name: String,
-}
-
-#[derive(Debug, Clone)]
-struct CargoDependsOnEdge {
-    src_node_id: u64,
-    dest_node_id: u64,
-
-    optional: bool,
-    with_features: Vec<String>,
-    kind: CargoDependencyKind,
-}
-
-trait RedisGraphParser {
-    fn parse(input: &GraphResult, data_variable_name: &str) -> anyhow::Result<Self>
-    where
-        Self: Sized;
-
-    fn parse_bulk(input: &[GraphResult], data_variable_name: &str) -> anyhow::Result<Vec<Self>>
-    where
-        Self: Sized,
-    {
-        input
-            .iter()
-            .map(|s| RedisGraphParser::parse(s, data_variable_name))
-            .collect()
-    }
-
-    fn parse_string_to_vec(val: Option<String>) -> Option<Vec<String>> {
-        val.map(|s| {
-            s.trim_start_matches('[')
-                .trim_end_matches(']')
-                .split(',')
-                .map(|s| s.to_string())
-                .collect::<Vec<String>>()
-        })
-    }
-}
-
-impl RedisGraphParser for CargoCrateVersionNode {
-    fn parse(input: &GraphResult, data_variable_name: &str) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        let node = input.get_node(data_variable_name).unwrap();
-
-        Ok(CargoCrateVersionNode {
-            node_id: node.id,
-            id: node.get_property("id")?.unwrap(),
-            num: node.get_property("num")?.unwrap(),
-            features: serde_json::from_str(&node.get_property::<String>("features")?.unwrap())?,
-            crate_name: node.get_property("crate_name")?.unwrap(),
-        })
-    }
-}
-
-impl RedisGraphParser for CargoDependsOnEdge {
-    fn parse(input: &GraphResult, data_variable_name: &str) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        let edge = input.get_relation(data_variable_name).unwrap();
-
-        Ok(CargoDependsOnEdge {
-            src_node_id: edge.src_node,
-            dest_node_id: edge.dest_node,
-            optional: edge.get_property::<String>("optional")?.unwrap().parse()?,
-            with_features: edge.get_property("with_features")?.unwrap(),
-            kind: edge.get_property::<i32>("kind")?.unwrap().into(),
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[repr(i32)]
-pub enum CargoDependencyKind {
-    Normal = 0,
-    Build = 1,
-    Dev = 2,
-}
-
-impl std::convert::From<i32> for CargoDependencyKind {
-    fn from(value: i32) -> Self {
-        match value {
-            0 => CargoDependencyKind::Normal,
-            1 => CargoDependencyKind::Build,
-            2 => CargoDependencyKind::Dev,
-            _ => panic!("Not implemented."),
-        }
-    }
 }

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use data_preprocessor::log_debug;
+use redis::Connection;
 use redis_graph::*;
 use sqlx::postgres::PgPoolOptions;
 
@@ -48,6 +49,10 @@ async fn main() -> Result<()> {
         redis_conn.graph_query(
             CARGO_GRAPH_NAME,
             "CREATE INDEX FOR (cv:CargoCrateVersion) ON (cv.id)",
+        )?;
+        redis_conn.graph_query(
+            CARGO_GRAPH_NAME,
+            "CREATE INDEX FOR (cu:CargoUser) ON (cu.id)",
         )?;
     }
 
@@ -119,5 +124,26 @@ async fn main() -> Result<()> {
     }
     log_debug!("Done executing redisgraph queries.");
 
+    // TODO: Blocks forever, make it run async in batches.
+    force_indexing(&mut redis_conn, "CargoUser", users.len())?;
+    force_indexing(&mut redis_conn, "CargoCrate", crates.len())?;
+    force_indexing(&mut redis_conn, "CargoCrateVersion", crate_versions.len())?;
+
+    Ok(())
+}
+
+fn force_indexing(
+    redis_conn: &mut Connection,
+    node_type_name: &str,
+    len: usize,
+) -> anyhow::Result<()> {
+    log_debug!("Forcing indexing on {node_type_name}...");
+    for i in 0..len {
+        redis_conn.graph_ro_query(
+            CARGO_GRAPH_NAME,
+            format!("match (s: {node_type_name} {{id: {i}}}) return s"),
+        )?;
+    }
+    log_debug!("Done forcing indexing on {node_type_name}.");
     Ok(())
 }

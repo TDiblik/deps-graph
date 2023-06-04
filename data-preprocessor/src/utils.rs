@@ -156,17 +156,16 @@ pub fn gen_dependency_redis_graph_link_query(
     gen_redis_creation_command(
         dependencies.iter().map(|s| {
             format!(
-                "[{}, {}, {}, {}, {}, {}, {}]",
+                "[{}, {}, {}, {}, {}, {}]",
                 s.from_version_id,
                 s.to_version_id,
                 s.optional,
-                s.default_features,
                 json!(s.with_features),
                 json!(s.target),
                 s.kind,
             )
         }).collect(),
-        Some("MATCH (cv_from:CargoCrateVersion {id: map[0]}), (cv_to:CargoCrateVersion {id: map[1]}) CREATE (cv_from)-[:DEPENDS_ON {optional: map[2], default_features: map[3], with_features: map[4], target: map[5], kind: map[6]}]->(cv_to)")
+        Some("MATCH (cv_from:CargoCrateVersion {id: map[0]}), (cv_to:CargoCrateVersion {id: map[1]}) CREATE (cv_from)-[:DEPENDS_ON {optional: map[2], with_features: map[3], target: map[4], kind: map[5]}]->(cv_to)")
     )
 }
 
@@ -270,13 +269,17 @@ pub fn connect_db_dependencies(
         }
 
         if let Some(pick) = best_possible_pick {
+            let mut features_to_include = dep.features.clone();
+            if dep.default_features {
+                features_to_include.push("default".to_owned());
+            }
+
             dependency_edges.push(CargoDependencyRGEdgeBuilder {
                 from_version_id: dep.from_version_id,
                 to_version_id: pick.id,
                 required_semver: dep.required_semver.clone(),
                 optional: dep.optional,
-                default_features: dep.default_features,
-                with_features: dep.features.clone(),
+                with_features: features_to_include,
                 target: dep.target.clone(),
                 kind: dep.kind.clone(),
             });
