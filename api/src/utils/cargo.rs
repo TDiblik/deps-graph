@@ -27,19 +27,20 @@ pub async fn traverse_tree(
     }
 
     let mut connections_to_traverse = Vec::new();
+    let edge_to_root = CargoDependsOnEdge {
+        src_node_id: u64::MAX, // u64::MAX == root
+        dest_node_id: root_node.node_id,
+        optional: false,
+        with_features: wanted_features,
+        kind: CargoDependencyKind::Normal,
+    };
     connections_to_traverse.push(GraphConnection {
-        edge: CargoDependsOnEdge {
-            src_node_id: u64::MAX, // u64::MAX == root
-            dest_node_id: root_node.node_id,
-            optional: false,
-            with_features: vec![],
-            kind: CargoDependencyKind::Normal,
-        },
-        node: root_node,
+        edge: edge_to_root.clone(),
+        node: root_node.clone(),
     });
 
-    let mut traversed_nodes: Vec<CargoCrateVersionNode> = vec![];
-    let mut traversed_edges: Vec<CargoDependsOnEdge> = vec![];
+    let mut traversed_nodes: Vec<CargoCrateVersionNode> = vec![root_node];
+    let mut traversed_edges: Vec<CargoDependsOnEdge> = vec![edge_to_root];
     while let Some(connection_to_traverse) = connections_to_traverse.pop() {
         let traversed_connections = traverse_node(
             redis_conn,
