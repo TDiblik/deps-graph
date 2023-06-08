@@ -10,6 +10,8 @@ use crate::models::cargo_db_types::{
 
 use super::constants::CARGO_GRAPH_NAME;
 
+// TODO: I am fairly certain that there are
+// at least 4 or 5 spots that could be optimized (not using clone, using references, etc)
 pub async fn traverse_tree(
     redis_conn: &mut Connection,
 
@@ -67,6 +69,7 @@ pub async fn traverse_tree(
             };
         }
 
+        #[cfg(debug_assertions)]
         dbg!(connections_to_traverse.len());
     }
 

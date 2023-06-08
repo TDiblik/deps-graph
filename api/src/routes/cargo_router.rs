@@ -39,6 +39,9 @@ async fn traverse_version(
     Query(query): Query<TraverseVersionQueryOptions>,
     State(app_state): State<AppState>,
 ) -> Result<Json<Value>, AppError> {
+    #[cfg(debug_assertions)]
+    let time_to_traverse = std::time::Instant::now();
+
     let mut redis_conn: Connection = app_state.get_redis_conn().await?;
 
     let root_node_req = redis_conn
@@ -59,6 +62,13 @@ async fn traverse_version(
         query.include_dev_dependencies.unwrap_or(false),
     )
     .await?;
+
+    #[cfg(debug_assertions)]
+    println!(
+        "Time it took to traverse {}: {:.2?}",
+        id,
+        time_to_traverse.elapsed()
+    );
 
     Ok(Json(json!(answ)))
 }
