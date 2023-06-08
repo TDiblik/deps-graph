@@ -54,6 +54,10 @@ async fn main() -> Result<()> {
             CARGO_GRAPH_NAME,
             "CREATE INDEX FOR (cu:CargoUser) ON (cu.id)",
         )?;
+        redis_conn.graph_query(
+            CARGO_GRAPH_NAME,
+            "CREATE INDEX FOR ()-[d:DEPENDS_ON]-() ON (d.kind)",
+        )?;
     }
 
     log_debug!("Start fetching data from postgres...");
