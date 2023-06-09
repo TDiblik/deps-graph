@@ -35,7 +35,7 @@
 #### Setup
 
 - Go into `./data-dump/redisgraph/`
-  - `docker run -it --name deps-graph-redisgraph -d -p 7500:6379 -v "$(pwd)/db-container-data/:/data" redislabs/redisgraph:2.12.1` (on Windows, replace `pwd` with `pwd -W`)
+  - `docker run -it --name deps-graph-redisgraph -d -p 7500:6379 -v "$(pwd)/db-container-data/:/data" -e NODE_CREATION_BUFFER=250000 redislabs/redisgraph:2.12.1` (on Windows, replace `pwd` with `pwd -W`)
   - If you want to try out running in constrained enviroment, add following flags: `--memory="1g" --memory-swap="9g"` before `-d` flag in the previous command
 
 #### Continue after shutdown
