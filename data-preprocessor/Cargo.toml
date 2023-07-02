@@ -10,8 +10,8 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.71"
 
-redis = "0.22.1"
-redis-graph = "0.4.3"
+redis = "0.23.0"
+redis-graph = "0.4.4"
 
 sqlx = { version = "0.6.3", features = ["runtime-tokio-native-tls" , "postgres", "json", "chrono" ] }
 tokio = { version ="1.28.1", features = ["full"] }
@@ -19,4 +19,4 @@ serde = "1.0.163"
 serde_json = "1.0.96"
 semver = "1.0.17"
 string-builder = "0.2.0"
-itertools = "0.10.5"
+itertools = "0.11.0"
