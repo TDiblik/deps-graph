@@ -1,10 +1,25 @@
+# Abandoned!
+
+This project has been Abandoned before beeing (properly) finished (there's no frontend xd). The reason for this is that projects like [cargo-tree](https://doc.rust-lang.org/cargo/commands/cargo-tree.html), [cargo-graph](https://github.com/kbknapp/cargo-graph), [cargo-depgraph](https://github.com/jplatte/cargo-depgraph) exist and choose a better strategies to show dependencies. Also, the graph database I chose will be in "maintanence mode" (end-of-life) soon (redisgraph). Sooo, in the current state:
+
+- pre-processor works
+  - takes cargo crates dump and creates a redisgraph database with inter-connected dependency versions
+  - uses a shit-tone of RAM (crates.io has a lot of packages), so setup at least 32GB swap beforehand!
+- api works
+  - uses the database to traverse dependencies for a package version (and caches the traversed results)
+  - Example usage of the API: `https://localhost:50001/api/v1/cargo/crate/v/:version_id/traverse` (every package version has unique ID, non-dependent on the package)
+- frontend
+  - nonexistent lol
+- use this repo as more of an example on how to work with:
+  - cargo crates data dumps
+  - rust's axum web server
+  - rust + redisgraph (even tho it's EOL)
+
 # Dev Setup
 
-## Docker
+## Cargo data dump
 
-### Cargo data dump
-
-#### Setup
+### Setup
 
 - Download latest data dump: https://static.crates.io/db-dump.tar.gz
 - Go into `./data-dumps/cargo/`
@@ -16,11 +31,11 @@
   - `psql dumpdb -U dumpuser < schema.sql`
   - `psql dumpdb -U dumpuser < import.sql`
 
-#### Continue after shutdown
+### Continue after shutdown
 
 - `docker start deps-graph-cargo-db-dump-container`
 
-#### Shutdown / cleanup
+### Shutdown / cleanup
 
 - Go into `./data-dumps/cargo/`
   - `docker ps` -- get id
@@ -30,19 +45,19 @@
   - `docker volume rm {id}`
   - `rm -rf db-container-data db-dump`
 
-### Redisgraph
+## Redisgraph
 
-#### Setup
+### Setup
 
 - Go into `./data-dump/redisgraph/`
   - `docker run -it --name deps-graph-redisgraph -d -p 7500:6379 -v "$(pwd)/db-container-data/:/data" redislabs/redisgraph:2.12.1` (on Windows, replace `pwd` with `pwd -W`)
   - If you want to try out running in constrained enviroment, add following flags: `--memory="1g" --memory-swap="9g"` before `-d` flag in the previous command
 
-#### Continue after shutdown
+### Continue after shutdown
 
 - `docker start deps-graph-redisgraph`
 
-#### Shutdown / cleanup
+### Shutdown / cleanup
 
 - Go into `./data-dumps/redisgraph/`
   - `docker ps` -- get id
